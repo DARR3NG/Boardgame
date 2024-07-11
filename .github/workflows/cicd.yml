@@ -18,3 +18,47 @@ jobs:
         cache: maven
     - name: Build with Maven
       run: mvn  package --file pom.xml
+    - uses: actions/upload-artifact@v4
+      with:
+        name: Boardgame
+        path: target/*jar
+    - name: Trivy fs Scan
+      run: |
+        trivy fs --format table -o trivy-fs-report.html .
+    - name: SonarQube Scan
+      uses: sonarsource/sonarqube-scan-action@master
+      env:
+        SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
+        SONAR_HOST_URL: ${{secrets.SONAR_HOST_URL}}
+    - name: jq
+      run: sudo apt-get update && sudo apt-get install -y jq
+    
+    - name: SonarQube Quality Gate check
+      id: sonarqube-quality-gate-check
+      uses: sonarsource/sonarqube-quality-action@master
+      #FForce to fail after specific time
+      timeout-minutes: 5
+      env:
+        SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
+        SONAR_HOST_URL: ${{secrets.SONAR_HOST_URL}}
+    - name: Set up QEMU
+      uses: docker/setup-qemu-actions@v3
+
+    - name: Set Up Docker  Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build && Tga docker image
+      run: |
+        docker build -t darr3ng/boardgame:latest .
+
+    - name: Trivy Image Scan
+      run: |
+        trivy image --format table -o trivy-image-report.html darr3ng/boardgame:latest
+    - name: Login to docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{secrets.DOCKERHUB_USERNAME}}
+        Password: ${{secrets.DOCKERHUB_TOKEN}}
+    - name: Push Docker Image
+      run: |
+        docker push darr3ng/boardgame:latest
